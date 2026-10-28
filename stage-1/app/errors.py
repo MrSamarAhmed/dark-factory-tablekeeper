@@ -2,6 +2,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from json import JSONDecodeError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 import json
 
 class APIError(Exception):
@@ -38,6 +39,7 @@ HTTP_CODE_NAMES = {
     401: "unauthenticated",
     403: "forbidden",
     404: "not_found",
+    405: "not_found",
     409: "table_unavailable",
     422: "validation_failed",
 }
@@ -55,10 +57,20 @@ def register_exception_handlers(app: FastAPI) -> None:
     async def validation_exception_handler(request: Request, exc: RequestValidationError):
         return error_response(400, "malformed_request", f"Request does not match its contract: {exc}")
 
+    # An unmatched path or method never reaches a route handler, so without this the
+    # framework's own `{"detail": ...}` body would answer in place of §5's envelope.
+    @app.exception_handler(StarletteHTTPException)
+    async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+        code = HTTP_CODE_NAMES.get(exc.status_code) or (
+            "not_found" if exc.status_code < 500 else "internal"
+        )
+        response = error_response(exc.status_code, code, str(exc.detail))
+        if exc.headers:
+            response.headers.update(exc.headers)
+        return response
+
     @app.exception_handler(Exception)
     async def catch_all_handler(request: Request, exc: Exception):
-        from fastapi.exceptions import HTTPException
-        if isinstance(exc, HTTPException):
-            code = HTTP_CODE_NAMES.get(exc.status_code, "malformed_request")
-            return error_response(exc.status_code, code, str(exc.detail))
+        if isinstance(exc, StarletteHTTPException):
+            return await http_exception_handler(request, exc)
         return error_response(500, "internal", "Internal server error")

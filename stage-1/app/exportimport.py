@@ -1,4 +1,6 @@
+import re
 import sqlite3
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from app.db import get_connection, transaction
 from app.errors import APIError
@@ -37,9 +39,29 @@ COLUMN_MAP = {
     ),
 }
 
+INTEGER_RANGES = {
+    "restaurants": {
+        "slot_minutes": (1, 2**63 - 1),
+        "reservation_duration_minutes": (0, 2**63 - 1),
+        "cancellation_cutoff_minutes": (0, 2**63 - 1),
+    },
+    "tables": {
+        "max_seats": (1, 2**63 - 1),
+        "position": (0, 2**63 - 1),
+    },
+    "opening_hours": {"weekday": (0, 6)},
+    "reservations": {
+        "party_size": (1, 2**63 - 1),
+        "duration_minutes": (0, 2**63 - 1),
+    },
+    "idempotency_receipts": {"status_code": (200, 299)},
+}
+TIME_RE = re.compile(r"(?:[01][0-9]|2[0-3]):[0-5][0-9]")
+
 
 def export_state() -> dict:
     with get_connection() as conn:
+        conn.execute("BEGIN;")
         state = {}
         for name in STATE_TABLES:
             columns = COLUMN_MAP[name]
@@ -78,6 +100,31 @@ def _validate_document(data) -> None:
                 if column not in row:
                     raise APIError(422, "validation_failed",
                                    f"{name} entry is missing {column}")
+            for column, (minimum, maximum) in INTEGER_RANGES.get(name, {}).items():
+                value = row[column]
+                if (isinstance(value, bool) or not isinstance(value, int)
+                        or not minimum <= value <= maximum):
+                    raise APIError(422, "validation_failed",
+                                   f"{name}.{column} must be an integer between "
+                                   f"{minimum} and {maximum}")
+            if name == "restaurants":
+                if not isinstance(row["timezone"], str):
+                    raise APIError(422, "validation_failed",
+                                   "restaurants.timezone must be a valid timezone")
+                try:
+                    ZoneInfo(row["timezone"])
+                except (ZoneInfoNotFoundError, ValueError):
+                    raise APIError(422, "validation_failed",
+                                   "restaurants.timezone must be a valid timezone")
+            if name == "opening_hours":
+                for column in ("opens", "closes"):
+                    value = row[column]
+                    if not isinstance(value, str) or not TIME_RE.fullmatch(value):
+                        raise APIError(422, "validation_failed",
+                                       f"opening_hours.{column} must be exact HH:MM")
+                if row["opens"] >= row["closes"]:
+                    raise APIError(422, "validation_failed",
+                                   "opening_hours.opens must be before closes")
 
 
 def import_state(data) -> None:
@@ -106,6 +153,6 @@ def import_state(data) -> None:
                         f"INSERT INTO {name} ({column_sql}) VALUES ({placeholders})",
                         [row[column] for column in columns],
                     )
-        except sqlite3.Error:
+        except (sqlite3.Error, OverflowError):
             raise APIError(422, "validation_failed",
                            "Import document contains invalid or conflicting state")

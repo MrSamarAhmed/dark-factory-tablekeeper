@@ -206,7 +206,6 @@ async def auth_signup(request: Request):
     display_name = require_string(body, "display_name")
 
     email = email.strip()
-    password = password.strip()
     display_name = display_name.strip()
 
     # Required by the Tablekeeper contract.

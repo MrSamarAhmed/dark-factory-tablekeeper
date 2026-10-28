@@ -67,9 +67,10 @@ async def reservation_moves(
         moves = validate_moves(body)
         listed = [move["reference"] for move in moves]
 
-        # Everything that is not occupancy, in input order, so the first offending
-        # booking decides the error; its cutoff precedes any change to it.
-        planned = []
+        # §11 makes ownership and a single restaurant conditions on the whole batch, so
+        # they are settled before any booking is changed -- a later unknown reference
+        # must not be masked by an earlier item's own error.
+        rows = []
         restaurant_id = None
         for move in moves:
             row = fetch_owned(conn, move["reference"], user_id)
@@ -77,6 +78,12 @@ async def reservation_moves(
                 restaurant_id = row["restaurant_id"]
             elif row["restaurant_id"] != restaurant_id:
                 raise APIError(422, "validation_failed", "a batch must stay inside one restaurant")
+            rows.append(row)
+
+        # Everything that is not occupancy, in input order, so the first offending
+        # booking decides the error; its cutoff precedes any change to it.
+        planned = []
+        for move, row in zip(moves, rows):
             if row["status"] == "cancelled":
                 raise APIError(409, "reservation_cancelled",
                                f"Reservation {move['reference']} is cancelled")

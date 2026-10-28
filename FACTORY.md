@@ -106,12 +106,19 @@ Backed by `evidence/builds/` and `evidence/reviews/` plus workspace file mtimes:
   Reviewer independently inspected and re-ran the suite before approving.
   All three task-1/task-2 reviews and the attempt-1/attempt-3 task-3 reviews
   were genuine Reviewer-seat verdicts, unprompted.
-- **No message history in `room.json`.** The BAND REST API exposes no
-  message-history endpoint, so the room export contains metadata and
-  participants only. The protocol traffic is evidenced instead by
-  `evidence/state.json` and `evidence/events.jsonl` (the factory's own
-  append-only records, including agent, status, and detail per event) and the
-  per-attempt artifacts in `evidence/builds/` and `evidence/reviews/`.
+- **`room.json` holds the full message history.** The export was taken with
+  `"scope": "full"` and contains 132 messages, each with its `content`,
+  `insertedAt`, `senderName` and `senderType`: by sender, 54 Architect, 48
+  Builder, 29 Reviewer and 1 operator message; by type, 129 `text` messages and
+  3 `participant` join events (the two agent seats and the operator). An earlier
+  version of this file stated that the BAND REST API exposes no message-history
+  endpoint and that the export carried metadata and participants only. That was
+  wrong — the transcript is in the repository, including the two injected
+  verdicts above (messages 122 and 127) and the Stage 1 requirements the
+  service was built against. `evidence/state.json`, `evidence/events.jsonl`
+  and the per-attempt artifacts in `evidence/builds/` and `evidence/reviews/`
+  remain the factory's own structured records and are the cross-check for the
+  timeline above.
 - **Builder timeout semantics.** A Builder session killed at the 15-minute cap
   is recorded by the factory as `build_finished` with whatever partial output
   exists — attempt 2 above is the visible instance (empty build artifact). This
@@ -120,9 +127,17 @@ Backed by `evidence/builds/` and `evidence/reviews/` plus workspace file mtimes:
 
 ## Reproducibility
 
-- The shipped artifact (`stage-1/`) is the run workspace **verbatim** (runtime
-  database, caches, and virtualenv excluded). Run instructions:
-  `stage-1/RUN.md`.
+- Commit `9a56d71` is the imported artifact; its byte-for-byte identity with the
+  Builder workspace has not been independently established. Subsequent local
+  changes are outside the factory loop: archived original tests, a replacement
+  suite, and application repairs. The October 1 contract (room message index 40)
+  differs from the October 3 NEW SPEC (index 110) tied to the delivered run.
+  The original tests match the later contract, not an earlier draft. Their
+  archive name `evidence/superseded_tests/` does not resolve this conflict.
+  See README for current repair evidence and unresolved requirements; current
+  passing tests do not verify the factory's historical approval claims.
+- The suite and the image are reproducible; the factory run is not replayable
+  from this package (it needs the BAND service and the seat credentials).
 - Factory credentials are NOT included. The factory runs from its own
   repository with a gitignored `.env` holding per-seat BAND agent keys; nothing
   in this package depends on them.

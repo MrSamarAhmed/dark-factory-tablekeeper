@@ -1,3 +1,20 @@
+"""Archived, not collected: `norecursedirs = evidence` in the root `pytest.ini`.
+
+These 19 tests shipped with commit `9a56d71` and failed 19/19 against the app in
+the same commit. They encode the October 3 contract — the "NEW SPEC" at
+`room.json` message index 110, which `evidence/state.json` records verbatim as
+`run.spec` for the delivered run `run-1791009577173` (uppercase codes such as
+`EMAIL_TAKEN`, `POST /_test/reset` -> `200 {"status": "reset"}`, a `name` signup
+field, `RES-XXXXXXXX` references). The service instead implements the October 1
+brief (`room.json` index 40: lowercase codes, 204 reset, `display_name`,
+`[A-Z0-9]` references), which the live suite under `stage-1/tests/` targets.
+
+Neither contract has been declared authoritative, so the directory name
+`superseded_tests` records the file's status in the tree, not a proven
+supersession of the requirements it encodes. The tests are kept byte-identical
+as provenance of that unresolved conflict; see "The test suite was rewritten" in
+the top-level README.
+"""
 import pytest
 from datetime import datetime, timezone, timedelta
 import concurrent.futures

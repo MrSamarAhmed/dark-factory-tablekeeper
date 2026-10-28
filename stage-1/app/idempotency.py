@@ -1,11 +1,16 @@
 import hashlib
 import json
+from typing import Optional, Union
 from fastapi import Response
 from app.errors import APIError
 
+# The delivery constraints keep the whole tree runnable on Python 3.9, which has no
+# `X | Y` annotations at runtime.
+BodyData = Optional[Union[dict, list]]
+
 MAX_KEY_LENGTH = 255
 
-def compute_body_hash(body_data: dict | list | None) -> str:
+def compute_body_hash(body_data: BodyData) -> str:
     if body_data is None:
         serialized = ""
     else:
@@ -20,7 +25,7 @@ def require_idempotency_key(key) -> str:
                        f"Idempotency-Key must be 1 to {MAX_KEY_LENGTH} characters")
     return key
 
-def check_idempotency(conn, scope: str, user_id: str, key: str, body_data: dict | list | None):
+def check_idempotency(conn, scope: str, user_id: str, key: str, body_data: BodyData):
     """The stored response for a key this caller already used successfully.
 
     A replay is 200 whatever the original status was, and the body is the original
@@ -40,7 +45,7 @@ def check_idempotency(conn, scope: str, user_id: str, key: str, body_data: dict 
                        "Idempotency-Key was already used with a different request body")
     return Response(content=row["response_body"], status_code=200, media_type="application/json")
 
-def store_idempotency_receipt(conn, scope: str, user_id: str, key: str, body_data: dict | list | None, status_code: int, response_data: dict):
+def store_idempotency_receipt(conn, scope: str, user_id: str, key: str, body_data: BodyData, status_code: int, response_data: dict):
     full_scope = f"{scope}:{user_id}"
     conn.execute(
         "INSERT OR REPLACE INTO idempotency_receipts (scope, key, request_hash, status_code, response_body) VALUES (?, ?, ?, ?, ?)",
