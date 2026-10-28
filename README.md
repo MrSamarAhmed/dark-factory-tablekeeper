@@ -24,6 +24,8 @@ result/
 ├── README.md
 ├── FACTORY.md
 ├── pytest.ini
+├── .github/
+│   └── workflows/ci.yml
 ├── mandates/
 │   ├── architect.md
 │   ├── builder.md
@@ -128,17 +130,35 @@ and the code name `not_found` for 405 is our own.
 
 ### CI status
 
-There is **no CI running on this repository**. A draft `.github/workflows/ci.yml`
-exists in the local working copy only; it is deliberately not committed, because
-publishing a workflow would start GitHub Actions runs on the remote and that
-change has not been authorized. The draft is described here so it can be
-reviewed, not because any of it has executed on GitHub: it would run the suite
-against Python 3.9 and 3.12, then build the delivered image and assert `/health`
-returns `{"status": "ok"}` under the 2 vCPU / 2 GiB limits.
+`.github/workflows/ci.yml` runs on every push and pull request. A `suite` job
+installs `stage-1/requirements.txt` and runs `python -m pytest -q` from `stage-1`
+on Python 3.9 and 3.12 (`fail-fast: false`); an `image` job builds
+`stage-1/Dockerfile` and asserts `GET /health` returns exactly `{"status": "ok"}`
+under the delivery limits of 2 vCPU / 2 GiB. It references no secrets.
 
-The equivalent steps were run by hand in isolated containers on 2026-10-28, and
-the results in the table above come from those manual runs. No Actions run has
-been observed.
+What a green run does **not** mean:
+
+- `pytest.ini` limits collection to `stage-1/tests` and excludes `evidence/`, so
+  `evidence/superseded_tests/test_tablekeeper_stage0_spec.py` — the file that
+  encodes the October 3 contract — never executes on CI. The unresolved
+  October 1 vs October 3 conflict is therefore invisible to the workflow, exactly
+  as it is invisible to the local suite.
+- The `image` job checks the health envelope only. It does not run the contract
+  suite inside the built image, so it cannot fail for a behavioral regression.
+- `requirements.txt` is lower-bound pinned (`fastapi>=0.110.0`, `pytest>=8.0.0`),
+  so CI installs whatever is newest; a future FastAPI/Starlette/pytest release can
+  break the run for reasons unrelated to this repository.
+
+Before it was committed, every step was replayed verbatim in isolated Linux
+containers: 98 passed on Python 3.12.16 and on 3.9.25 with the newest resolvable
+dependencies, and the health check returned two `200 OK` responses from the built
+image. That rehearsal caught one real defect — the `image` job declares no Python,
+so the bare `python` it originally called resolved to nothing on macOS and on
+minimal Linux bases (exit 127, `python: command not found`) and only worked
+wherever the OS happens to ship `python-is-python3`. It now calls `python3`.
+
+The results in the table above still come from the 2026-10-28 manual reruns; the
+workflow is the record for anything after that.
 
 ### The test suite was rewritten
 

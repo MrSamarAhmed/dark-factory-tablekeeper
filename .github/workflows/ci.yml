@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  suite:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.9", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install dependencies
+        working-directory: stage-1
+        run: python -m pip install -r requirements.txt
+      - name: Run the contract suite
+        working-directory: stage-1
+        run: python -m pytest -q
+
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the delivered image
+        run: docker build -t tablekeeper stage-1
+      - name: Start it and check the contract
+        run: |
+          trap 'docker logs tablekeeper; docker rm -f tablekeeper' EXIT
+          docker run -d --name tablekeeper -e PORT=9000 \
+            -p 127.0.0.1:9099:9000 --cpus 2 --memory 2g tablekeeper
+          for i in $(seq 1 60); do
+            if curl --fail --silent --max-time 2 http://127.0.0.1:9099/health >/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          curl --fail --silent --show-error --max-time 2 http://127.0.0.1:9099/health \
+            | python3 -c 'import json, sys; assert json.load(sys.stdin) == {"status": "ok"}'

@@ -44,9 +44,10 @@ docker run --rm -v "$PWD":/work -w /work python:3.12-slim \
 Both the 3.12 and the 3.9 image run the suite green, which is required because
 the delivery constraints demand 3.9 compatibility. The 2026-10-28 reruns used
 the container command above with `python:3.12-slim` and `python:3.9-slim`
-invoked from `stage-1/`; a draft workflow that would enforce both exists in the
-local working copy but is not committed (see "CI status" in the top-level
-README), so no version of this suite has ever run on GitHub Actions.
+invoked from `stage-1/`. `.github/workflows/ci.yml` now enforces both versions on
+every push and pull request and additionally builds this directory's Dockerfile and
+asserts `/health`; see "CI status" in the top-level README for what that workflow
+does and does not cover.
 
 One environment caveat, discovered rather than assumed: the service hashes
 passwords with `hashlib.scrypt`, and the Python bundled with Xcode command-line
